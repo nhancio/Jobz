@@ -185,3 +185,61 @@
 html {
   font-size: var(--font-size);
 }
+
+/* Performance optimizations for smooth animations */
+@layer utilities {
+  /* GPU acceleration for animations */
+  .will-change-transform {
+    will-change: transform;
+  }
+  
+  /* Smooth scrolling */
+  .overscroll-contain {
+    overscroll-behavior: contain;
+  }
+  
+  /* Touch optimizations */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+  
+  /* Prevent text selection during drag */
+  .no-select {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  
+  /* Custom scrollbar for better mobile experience */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 2px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Mobile viewport fixes */
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari specific fixes */
+  body {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Prevent pull-to-refresh on swipe cards */
+.swipe-container {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}

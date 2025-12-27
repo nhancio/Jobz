@@ -35,10 +35,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      
+      // When user signs in, ensure they exist in the database
+      if (event === 'SIGNED_IN' && session?.user) {
+        try {
+          // Supabase automatically creates users in auth.users on sign in
+          // We can optionally create a user metadata record here if needed
+          console.log('User signed in:', session.user.id);
+        } catch (error) {
+          console.error('Error handling sign in:', error);
+        }
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -49,16 +60,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.');
     }
 
-    const { error } = await supabase.auth.signInWithOAuth({
+    // Check if LinkedIn provider is enabled
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'linkedin',
       options: {
         redirectTo: window.location.origin,
-        scopes: 'r_liteprofile r_emailaddress', // Request LinkedIn profile and email
+        scopes: 'r_liteprofile r_emailaddress openid profile email', // Request LinkedIn profile and email
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
       },
     });
 
-    if (error) {
-      throw error;
+    if (oauthError) {
+      // Provide helpful error message
+      if (oauthError.message?.includes('not enabled') || oauthError.message?.includes('provider')) {
+        throw new Error(
+          'LinkedIn OAuth is not enabled in Supabase. ' +
+          'Please go to Supabase Dashboard → Authentication → Providers → LinkedIn ' +
+          'and enable it with your LinkedIn Client ID and Secret.'
+        );
+      }
+      throw oauthError;
     }
   };
 

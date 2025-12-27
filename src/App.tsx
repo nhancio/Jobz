@@ -3,13 +3,14 @@ import { RoleSelection } from './components/RoleSelection';
 import { CreateProfile } from './components/CreateProfile';
 import { SwipeView } from './components/SwipeView';
 import { MatchesView } from './components/MatchesView';
+import { ProfileView } from './components/ProfileView';
 import { Login } from './components/Login';
 import { Job, Candidate } from './data/mockData';
 import { useAuth } from './contexts/AuthContext';
 import { getProfile } from './lib/profiles';
 import { Loader2 } from 'lucide-react';
 
-export type View = 'create' | 'swipe' | 'matches';
+export type View = 'create' | 'swipe' | 'matches' | 'profile';
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -111,6 +112,13 @@ export default function App() {
           matches={matches}
           mode={userType}
           onBack={() => setCurrentView('swipe')}
+        />
+      )}
+      {currentView === 'profile' && (
+        <ProfileView 
+          mode={userType}
+          onBack={() => setCurrentView('swipe')}
+          onNavigate={setCurrentView}
         />
       )}
     </div>
