@@ -20,18 +20,26 @@ export async function extractProfileFromText(
   text: string,
   mode: 'seeker' | 'employer'
 ): Promise<any> {
-  if (!genAI) {
-    throw new Error('Gemini API key is not configured. Please set VITE_GEMINI_API_KEY in your .env file.');
+  // If Gemini is not configured, return fallback data instead of throwing
+  if (!genAI || !API_KEY) {
+    console.warn('Gemini API not configured. Using fallback data extraction.');
+    return getFallbackData(text, mode);
   }
 
   try {
-    // Use gemini-1.5-flash (faster and more cost-effective) or gemini-1.5-pro (better quality)
-    // gemini-pro is deprecated - use gemini-1.5-flash or gemini-1.5-pro instead
-    // Available models: gemini-1.5-flash, gemini-1.5-pro, gemini-pro-1.5
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    // Try different model names in order of preference
+    // Some API keys may have access to different models
+    const modelNames = ['gemini-1.5-pro', 'gemini-pro', 'gemini-1.5-flash-latest', 'gemini-1.5-flash'];
+    
+    let lastError: any = null;
+    
+    // Try each model until one works
+    for (const modelName of modelNames) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
 
-    const prompt = mode === 'seeker'
-      ? `Extract structured information from the following job seeker profile description. Return a JSON object with the following structure:
+        const prompt = mode === 'seeker'
+          ? `Extract structured information from the following job seeker profile description. Return a JSON object with the following structure:
 {
   "bio": "A brief professional bio (2-3 sentences)",
   "skills": ["skill1", "skill2", "skill3"],
@@ -43,7 +51,7 @@ Text: ${text}
 
 Return ONLY valid JSON, no additional text or markdown formatting.`
 
-      : `Extract structured information from the following job posting description. Return a JSON object with the following structure:
+          : `Extract structured information from the following job posting description. Return a JSON object with the following structure:
 {
   "description": "A detailed job description (2-3 paragraphs)",
   "requirements": ["requirement1", "requirement2", "requirement3"],
@@ -55,50 +63,123 @@ Text: ${text}
 
 Return ONLY valid JSON, no additional text or markdown formatting.`;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const responseText = response.text();
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const responseText = response.text();
 
-    // Clean the response - remove markdown code blocks if present
-    let cleanedText = responseText.trim();
-    if (cleanedText.startsWith('```json')) {
-      cleanedText = cleanedText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-    } else if (cleanedText.startsWith('```')) {
-      cleanedText = cleanedText.replace(/```\n?/g, '');
+        // Clean the response - remove markdown code blocks if present
+        let cleanedText = responseText.trim();
+        if (cleanedText.startsWith('```json')) {
+          cleanedText = cleanedText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+        } else if (cleanedText.startsWith('```')) {
+          cleanedText = cleanedText.replace(/```\n?/g, '');
+        }
+
+        // Parse JSON response
+        const profileData = JSON.parse(cleanedText);
+
+        // Ensure arrays exist
+        if (mode === 'seeker') {
+          return {
+            bio: profileData.bio || 'No bio provided.',
+            skills: Array.isArray(profileData.skills) ? profileData.skills : [],
+            experience: profileData.experience || 'Not specified',
+            education: profileData.education || 'Not specified',
+          };
+        } else {
+          return {
+            description: profileData.description || 'No description provided.',
+            requirements: Array.isArray(profileData.requirements) ? profileData.requirements : [],
+            salary: profileData.salary || 'Not specified',
+            type: profileData.type || 'Full-time',
+          };
+        }
+      } catch (error: any) {
+        // This model didn't work, try the next one
+        lastError = error;
+        console.warn(`Model ${modelName} failed, trying next...`, error.message);
+        continue;
+      }
     }
-
-    // Parse JSON response
-    const profileData = JSON.parse(cleanedText);
-
-    // Ensure arrays exist
-    if (mode === 'seeker') {
-      return {
-        bio: profileData.bio || 'No bio provided.',
-        skills: Array.isArray(profileData.skills) ? profileData.skills : [],
-        experience: profileData.experience || 'Not specified',
-        education: profileData.education || 'Not specified',
-      };
-    } else {
-      return {
-        description: profileData.description || 'No description provided.',
-        requirements: Array.isArray(profileData.requirements) ? profileData.requirements : [],
-        salary: profileData.salary || 'Not specified',
-        type: profileData.type || 'Full-time',
-      };
-    }
+    
+    // If all models failed, throw the last error (but we'll catch it and return fallback)
+    throw lastError || new Error('All Gemini models failed');
   } catch (error: any) {
     console.error('Error extracting profile from text:', error);
     
-    // Provide helpful error message with model suggestions
-    if (error.message?.includes('not found') || error.message?.includes('404')) {
-      throw new Error(
-        `Gemini model not available. The model 'gemini-1.5-flash' may not be accessible with your API key. ` +
-        `Try updating the model name in src/lib/gemini.ts to 'gemini-1.5-pro' or check your API key permissions. ` +
-        `Original error: ${error.message}`
-      );
-    }
+    // Return a fallback response instead of throwing
+    // This allows the app to continue working even if Gemini fails
+    console.warn('Gemini API failed, returning fallback data. User can still use the app.');
     
-    throw new Error(`Failed to process text with AI: ${error.message}`);
+    return getFallbackData(text, mode);
   }
+}
+
+/**
+ * Fallback data extraction when Gemini is unavailable
+ */
+function getFallbackData(text: string, mode: 'seeker' | 'employer'): any {
+  if (mode === 'seeker') {
+    return {
+      bio: text.substring(0, 200) + (text.length > 200 ? '...' : ''),
+      skills: extractSkillsFromText(text),
+      experience: 'Not specified',
+      education: 'Not specified',
+    };
+  } else {
+    return {
+      description: text.substring(0, 300) + (text.length > 300 ? '...' : ''),
+      requirements: extractRequirementsFromText(text),
+      salary: 'Not specified',
+      type: 'Full-time',
+    };
+  }
+}
+
+/**
+ * Simple text extraction helpers as fallback when Gemini fails
+ */
+function extractSkillsFromText(text: string): string[] {
+  const skillKeywords = [
+    'javascript', 'typescript', 'react', 'node', 'python', 'java', 'css', 'html',
+    'sql', 'mongodb', 'postgresql', 'aws', 'docker', 'kubernetes', 'git',
+    'figma', 'design', 'marketing', 'sales', 'management', 'leadership'
+  ];
+  
+  const foundSkills: string[] = [];
+  const lowerText = text.toLowerCase();
+  
+  skillKeywords.forEach(skill => {
+    if (lowerText.includes(skill)) {
+      foundSkills.push(skill.charAt(0).toUpperCase() + skill.slice(1));
+    }
+  });
+  
+  return foundSkills.length > 0 ? foundSkills : ['See description'];
+}
+
+function extractRequirementsFromText(text: string): string[] {
+  const requirementPatterns = [
+    /(\d+)\+?\s*years?/gi,
+    /bachelor/i,
+    /master/i,
+    /degree/i,
+    /experience/i,
+    /required/gi
+  ];
+  
+  const requirements: string[] = [];
+  const sentences = text.split(/[.!?]/);
+  
+  sentences.forEach(sentence => {
+    if (requirementPatterns.some(pattern => pattern.test(sentence))) {
+      const cleanSentence = sentence.trim().substring(0, 100);
+      if (cleanSentence.length > 10) {
+        requirements.push(cleanSentence);
+      }
+    }
+  });
+  
+  return requirements.length > 0 ? requirements.slice(0, 5) : ['See description'];
 }
 

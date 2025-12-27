@@ -101,14 +101,27 @@ export function CreateProfile({ mode, onProfileCreated }: CreateProfileProps) {
         setIsRecording(false);
         
         if (fullTranscript.trim()) {
-          // Process with Gemini
+          // Process with Gemini (with graceful fallback)
           setIsProcessing(true);
           try {
             const profileData = await extractProfileFromText(fullTranscript.trim(), mode);
             setVoiceData(profileData);
+            // Clear any previous errors on success
+            setError(null);
           } catch (err: any) {
             console.error('Error processing voice:', err);
-            setError(err.message || 'Failed to process voice input. Please try again.');
+            // Don't show error to user - fallback data should be returned
+            // Only show error if it's a critical issue
+            if (!err.message?.includes('fallback')) {
+              setError('AI processing unavailable, but you can still continue. Your input has been saved.');
+            }
+            // Set basic voice data from transcript as fallback
+            setVoiceData({
+              bio: fullTranscript.trim(),
+              skills: [],
+              experience: 'Not specified',
+              education: 'Not specified',
+            });
           } finally {
             setIsProcessing(false);
           }
