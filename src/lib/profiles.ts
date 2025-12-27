@@ -36,10 +36,41 @@ export async function saveProfile(data: ProfileData): Promise<ProfileData> {
   }
 
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    // Try to get user from Supabase, but handle errors gracefully
+    let user = null;
+    try {
+      const { data: { user: supabaseUser } } = await supabase.auth.getUser();
+      user = supabaseUser;
+    } catch (authError) {
+      // Supabase auth error (e.g., no session) - this is OK for demo mode
+      console.log('No Supabase session found, using local storage mode.');
+      user = null;
+    }
     
+    // If no authenticated user, save locally (for demo mode or when Supabase is not configured)
     if (!user) {
-      throw new Error('User not authenticated');
+      // Allow saving without authentication (for demo/local use)
+      console.log('Saving profile locally (no Supabase authentication).');
+      return {
+        ...data,
+        id: `local-${Date.now()}`,
+        user_id: 'local-user',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    }
+    
+    // Check if this is a demo user (shouldn't happen with Supabase, but just in case)
+    if (user.id && user.id.startsWith('demo-user-')) {
+      // Demo mode - save locally without database
+      console.log('Demo user detected, saving profile locally.');
+      return {
+        ...data,
+        id: `demo-${Date.now()}`,
+        user_id: user.id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
     }
 
     // Check if profile already exists

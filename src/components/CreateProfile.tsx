@@ -12,6 +12,7 @@ interface CreateProfileProps {
 
 export function CreateProfile({ mode, onProfileCreated }: CreateProfileProps) {
   const { user, fetchLinkedInProfile } = useAuth();
+  const isDemoMode = user?.id?.startsWith('demo-user-') || !user;
   const [step, setStep] = useState(1);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -161,14 +162,25 @@ export function CreateProfile({ mode, onProfileCreated }: CreateProfileProps) {
       setError(null);
       setIsProcessing(true);
       
+      // In demo mode, use defaults if fields are empty
       const profileData = {
         mode,
-        name,
-        title,
-        location,
+        name: name || (mode === 'seeker' ? 'Demo User' : 'Demo Company'),
+        title: title || (mode === 'seeker' ? 'Demo Professional' : 'Demo Position'),
+        location: location || 'Demo Location',
         logo: mode === 'employer' ? photo : undefined,
         avatar: mode === 'seeker' ? photo : undefined,
-        ...voiceData
+        // Use voice data if available, otherwise use defaults
+        ...(voiceData || {
+          bio: mode === 'seeker' ? 'Demo profile created in demo mode.' : undefined,
+          description: mode === 'employer' ? 'Demo job posting created in demo mode.' : undefined,
+          skills: mode === 'seeker' ? ['Demo', 'Skills'] : undefined,
+          requirements: mode === 'employer' ? ['Demo requirements'] : undefined,
+          experience: 'Demo',
+          education: 'Demo',
+          salary: 'Demo',
+          type: 'Full-time',
+        })
       };
 
       // Save to database
@@ -223,6 +235,16 @@ export function CreateProfile({ mode, onProfileCreated }: CreateProfileProps) {
                 ? 'Let employers find you' 
                 : 'Find your perfect candidate'}
             </p>
+            {isDemoMode && (
+              <div className="mt-4">
+                <button
+                  onClick={handleComplete}
+                  className="text-sm text-blue-600 hover:text-blue-700 underline font-medium"
+                >
+                  Skip and use demo data →
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Progress Steps */}
@@ -292,14 +314,27 @@ export function CreateProfile({ mode, onProfileCreated }: CreateProfileProps) {
                   />
                 </div>
 
-                <button
-                  onClick={() => setStep(2)}
-                  disabled={!name || !title || !location}
-                  className="w-full bg-blue-600 text-white py-4 rounded-xl hover:bg-blue-700 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
-                >
-                  Continue
-                  <ArrowRight className="w-5 h-5" />
-                </button>
+                <div className="flex gap-3">
+                  {isDemoMode && (
+                    <button
+                      onClick={() => {
+                        // Skip to final step in demo mode
+                        setStep(3);
+                      }}
+                      className="flex-1 border border-slate-300 text-slate-700 py-4 rounded-xl hover:bg-slate-50 transition-all font-medium"
+                    >
+                      Skip All
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setStep(2)}
+                    disabled={!isDemoMode && (!name || !title || !location)}
+                    className={`${isDemoMode ? 'flex-1' : 'w-full'} bg-blue-600 text-white py-4 rounded-xl hover:bg-blue-700 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold`}
+                  >
+                    Continue
+                    <ArrowRight className="w-5 h-5" />
+                  </button>
+                </div>
               </motion.div>
             )}
 
@@ -357,10 +392,18 @@ export function CreateProfile({ mode, onProfileCreated }: CreateProfileProps) {
                   >
                     Back
                   </button>
+                  {isDemoMode && (
+                    <button
+                      onClick={() => setStep(3)}
+                      className="flex-1 border border-slate-300 text-slate-700 py-4 rounded-xl hover:bg-slate-50 transition-all font-medium"
+                    >
+                      Skip Photo
+                    </button>
+                  )}
                   <button
                     onClick={() => setStep(3)}
-                    disabled={!photo}
-                    className="flex-1 bg-blue-600 text-white py-4 rounded-xl hover:bg-blue-700 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
+                    disabled={!isDemoMode && !photo}
+                    className={`${isDemoMode ? 'flex-1' : 'flex-1'} bg-blue-600 text-white py-4 rounded-xl hover:bg-blue-700 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold`}
                   >
                     Continue
                     <ArrowRight className="w-5 h-5" />
@@ -462,10 +505,19 @@ export function CreateProfile({ mode, onProfileCreated }: CreateProfileProps) {
                   >
                     Back
                   </button>
+                  {isDemoMode && (
+                    <button
+                      onClick={handleComplete}
+                      disabled={isProcessing}
+                      className="flex-1 border border-blue-300 text-blue-700 py-4 rounded-xl hover:bg-blue-50 transition-all font-medium"
+                    >
+                      Skip Voice
+                    </button>
+                  )}
                   <button
                     onClick={handleComplete}
-                    disabled={!voiceData || isProcessing}
-                    className="flex-1 bg-blue-600 text-white py-4 rounded-xl hover:bg-blue-700 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
+                    disabled={!isDemoMode && (!voiceData || isProcessing)}
+                    className={`${isDemoMode ? 'flex-1' : 'flex-1'} bg-blue-600 text-white py-4 rounded-xl hover:bg-blue-700 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold`}
                   >
                     {isProcessing ? (
                       <>

@@ -16,7 +16,7 @@ Create a `.env` file in the root directory with your API keys:
 
 ```env
 # Google Gemini API Key (for voice-to-profile feature)
-VITE_GEMINI_API_KEY=AIzaSyDslO-K6UlB8INnP_gwUNNbMU5PvfNp4fQ
+VITE_GEMINI_API_KEY=your_gemini_api_key_here
 
 # Supabase Configuration (for authentication and database)
 VITE_SUPABASE_URL=your_supabase_project_url
@@ -91,7 +91,7 @@ Netlify is already configured for this project!
    - Go to Site settings → Environment variables
    - Add the following:
      ```
-     VITE_GEMINI_API_KEY = AIzaSyDslO-K6UlB8INnP_gwUNNbMU5PvfNp4fQ
+     VITE_GEMINI_API_KEY = your_gemini_api_key_here
      VITE_SUPABASE_URL = your_supabase_project_url
      VITE_SUPABASE_ANON_KEY = your_supabase_anon_key
      ```

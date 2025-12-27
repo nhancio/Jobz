@@ -11,7 +11,7 @@ npm install
 Create a `.env` file in the root directory:
 
 ```env
-VITE_GEMINI_API_KEY=AIzaSyDslO-K6UlB8INnP_gwUNNbMU5PvfNp4fQ
+VITE_GEMINI_API_KEY=your_gemini_api_key_here
 VITE_SUPABASE_URL=your_supabase_url_here
 VITE_SUPABASE_ANON_KEY=your_supabase_key_here
 ```
@@ -45,7 +45,7 @@ git push
 
 ### 4. Add Environment Variables
 In Netlify dashboard → Site settings → Environment variables:
-- `VITE_GEMINI_API_KEY` = `AIzaSyDslO-K6UlB8INnP_gwUNNbMU5PvfNp4fQ`
+- `VITE_GEMINI_API_KEY` = your Gemini API key
 - `VITE_SUPABASE_URL` = your Supabase URL
 - `VITE_SUPABASE_ANON_KEY` = your Supabase key
 
