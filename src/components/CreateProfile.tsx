@@ -1,6 +1,9 @@
-import { useState, useRef } from 'react';
-import { Camera, Sparkles, Mic, ArrowRight, Upload, Briefcase, User } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Camera, Sparkles, Mic, ArrowRight, Upload, Briefcase, User, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { extractProfileFromText } from '../lib/gemini';
+import { saveProfile } from '../lib/profiles';
+import { useAuth } from '../contexts/AuthContext';
 
 interface CreateProfileProps {
   mode: 'seeker' | 'employer';
@@ -8,17 +11,45 @@ interface CreateProfileProps {
 }
 
 export function CreateProfile({ mode, onProfileCreated }: CreateProfileProps) {
+  const { user, fetchLinkedInProfile } = useAuth();
   const [step, setStep] = useState(1);
   const [isRecording, setIsRecording] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [voiceData, setVoiceData] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [linkedInData, setLinkedInData] = useState<any>(null);
   
   // Form State
   const [name, setName] = useState(''); // Name or Company Name
   const [title, setTitle] = useState(''); // Job Title or Candidate Title
   const [location, setLocation] = useState('');
   const [photo, setPhoto] = useState<string>(''); // Avatar or Logo
+
+  // Fetch LinkedIn profile data on mount
+  useEffect(() => {
+    const loadLinkedInData = async () => {
+      if (user && user.id && !user.id.startsWith('demo-user-')) {
+        try {
+          const data = await fetchLinkedInProfile();
+          setLinkedInData(data);
+          
+          // Auto-populate form fields from LinkedIn
+          if (data.fullName) setName(data.fullName);
+          if (data.avatarUrl) setPhoto(data.avatarUrl);
+          if (data.headline) setTitle(data.headline);
+          if (data.location) setLocation(data.location);
+        } catch (err) {
+          console.log('Could not fetch LinkedIn profile:', err);
+          // Silently fail - user can still fill form manually
+        }
+      }
+    };
+    
+    loadLinkedInData();
+  }, [user, fetchLinkedInProfile]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<any>(null);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -31,40 +62,123 @@ export function CreateProfile({ mode, onProfileCreated }: CreateProfileProps) {
     }
   };
 
-  const handleVoiceInput = () => {
-    setIsRecording(true);
-    // Simulate AI processing voice input
-    setTimeout(() => {
-      setIsRecording(false);
+  const startRecording = () => {
+    try {
+      setError(null);
       
-      if (mode === 'seeker') {
-        setVoiceData({
-          bio: "I'm a passionate Full Stack Developer with 5 years of experience building scalable web applications. I love solving complex problems and working with modern technologies like React and Node.js.",
-          skills: ["React", "TypeScript", "Node.js", "AWS", "System Design"],
-          education: "BS Computer Science"
-        });
-      } else {
-        setVoiceData({
-          description: "We are looking for a Senior Product Designer to lead our design system initiatives. You should be proficient in Figma and have a strong portfolio of mobile and web apps. We offer a competitive salary and great benefits.",
-          requirements: ["5+ years experience", "Figma Expert", "Design Systems", "Leadership"],
-          salary: "$120k - $160k"
-        });
+      // Check for browser support
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        setError('Speech recognition not supported. Please use Chrome or Edge browser.');
+        return;
       }
-    }, 2500);
+
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      let fullTranscript = '';
+
+      recognition.onresult = (event: any) => {
+        // Accumulate all results
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            fullTranscript += event.results[i][0].transcript + ' ';
+          }
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        setError(`Speech recognition error: ${event.error}`);
+        setIsRecording(false);
+        setIsProcessing(false);
+      };
+
+      recognition.onend = async () => {
+        setIsRecording(false);
+        
+        if (fullTranscript.trim()) {
+          // Process with Gemini
+          setIsProcessing(true);
+          try {
+            const profileData = await extractProfileFromText(fullTranscript.trim(), mode);
+            setVoiceData(profileData);
+          } catch (err: any) {
+            console.error('Error processing voice:', err);
+            setError(err.message || 'Failed to process voice input. Please try again.');
+          } finally {
+            setIsProcessing(false);
+          }
+        } else {
+          setError('No speech detected. Please try again.');
+          setIsProcessing(false);
+        }
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+      setIsRecording(true);
+    } catch (err: any) {
+      console.error('Error starting recording:', err);
+      setError('Failed to start speech recognition. Please check permissions.');
+      setIsRecording(false);
+    }
   };
 
-  const handleComplete = () => {
-    const data = {
-      id: Date.now().toString(),
-      name, // Company or Candidate Name
-      title,
-      location,
-      logo: mode === 'employer' ? photo : undefined,
-      avatar: mode === 'seeker' ? photo : undefined,
-      ...voiceData
-    };
-    onProfileCreated(data);
+  const stopRecording = () => {
+    if (recognitionRef.current && isRecording) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+    }
   };
+
+  const handleVoiceInput = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  const handleComplete = async () => {
+    try {
+      setError(null);
+      setIsProcessing(true);
+      
+      const profileData = {
+        mode,
+        name,
+        title,
+        location,
+        logo: mode === 'employer' ? photo : undefined,
+        avatar: mode === 'seeker' ? photo : undefined,
+        ...voiceData
+      };
+
+      // Save to database
+      const savedProfile = await saveProfile(profileData);
+      
+      // Callback with saved data
+      onProfileCreated(savedProfile);
+    } catch (err: any) {
+      console.error('Error saving profile:', err);
+      setError(err.message || 'Failed to save profile. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current && isRecording) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, [isRecording]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
@@ -120,6 +234,16 @@ export function CreateProfile({ mode, onProfileCreated }: CreateProfileProps) {
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
+                {linkedInData && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                    <p className="text-sm text-blue-700 font-medium mb-1">
+                      ✓ LinkedIn profile data loaded
+                    </p>
+                    <p className="text-xs text-blue-600">
+                      Fields have been pre-filled from your LinkedIn profile
+                    </p>
+                  </div>
+                )}
                 <div>
                   <label className="block text-slate-700 font-medium mb-2">
                     {mode === 'seeker' ? 'Full Name' : 'Company Name'}
@@ -254,25 +378,38 @@ export function CreateProfile({ mode, onProfileCreated }: CreateProfileProps) {
                   <div className="flex flex-col items-center gap-6">
                     <motion.button
                       onClick={handleVoiceInput}
-                      disabled={isRecording || voiceData}
+                      disabled={isProcessing || voiceData}
                       whileTap={{ scale: 0.95 }}
                       className={`w-24 h-24 rounded-full flex items-center justify-center transition-all shadow-lg ${
                         isRecording
                           ? 'bg-red-500 animate-pulse'
+                          : isProcessing
+                          ? 'bg-yellow-500'
                           : voiceData
                           ? 'bg-green-500'
                           : 'bg-blue-600 hover:bg-blue-700'
                       }`}
                     >
-                      <Mic className="w-10 h-10 text-white" />
+                      {isProcessing ? (
+                        <Loader2 className="w-10 h-10 text-white animate-spin" />
+                      ) : (
+                        <Mic className="w-10 h-10 text-white" />
+                      )}
                     </motion.button>
-                    <p className="text-slate-700 font-medium">
+                    <p className="text-slate-700 font-medium text-center">
                       {isRecording
-                        ? 'Listening...'
+                        ? 'Recording... Click again to stop'
+                        : isProcessing
+                        ? 'Processing with AI...'
                         : voiceData
                         ? 'Success! AI generated the details.'
                         : 'Tap to start recording'}
                     </p>
+                    {error && (
+                      <p className="text-red-600 text-sm text-center bg-red-50 p-3 rounded-lg border border-red-200">
+                        {error}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -314,11 +451,20 @@ export function CreateProfile({ mode, onProfileCreated }: CreateProfileProps) {
                   </button>
                   <button
                     onClick={handleComplete}
-                    disabled={!voiceData}
+                    disabled={!voiceData || isProcessing}
                     className="flex-1 bg-blue-600 text-white py-4 rounded-xl hover:bg-blue-700 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
                   >
-                    {mode === 'seeker' ? 'Create Profile' : 'Post Job'}
-                    <Sparkles className="w-5 h-5" />
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        {mode === 'seeker' ? 'Create Profile' : 'Post Job'}
+                        <Sparkles className="w-5 h-5" />
+                      </>
+                    )}
                   </button>
                 </div>
               </motion.div>
