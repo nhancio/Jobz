@@ -69,6 +69,13 @@ If you don't have LinkedIn credentials yet:
    - Go to "Products" tab in LinkedIn app
    - Request "Sign In with LinkedIn using OpenID Connect"
    - Usually approved instantly
+   - **Important**: Make sure this product is approved before using LinkedIn OAuth
+
+6. **Configure Scopes in Supabase**
+   - In Supabase → Authentication → Providers → LinkedIn
+   - The scopes should be: `openid profile email`
+   - **Note**: The old scopes `r_liteprofile` and `r_emailaddress` are deprecated
+   - Supabase should automatically use the correct OpenID Connect scopes
 
 ### Step 3: Verify Configuration
 
@@ -128,6 +135,30 @@ When a user signs in with LinkedIn:
 - Verify you're using the correct Client ID from LinkedIn
 - Check for typos or extra spaces
 
+## OpenID Connect Scopes
+
+According to [LinkedIn's OpenID Connect documentation](https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/sign-in-with-linkedin-v2), the app uses these scopes:
+
+| Scope | Description |
+|-------|-------------|
+| `openid` | Required to indicate the application wants to use OIDC to authenticate the member |
+| `profile` | Required to retrieve the member's lite profile including their id, name, and profile picture |
+| `email` | Required to retrieve the member's email address |
+
+**Note**: The old scopes `r_liteprofile` and `r_emailaddress` are deprecated and should not be used.
+
+### Available Profile Fields
+
+With OpenID Connect, you get these fields in the user metadata:
+- `sub` - Subject identifier (LinkedIn user ID)
+- `name` - Full name
+- `given_name` - First name
+- `family_name` - Last name
+- `picture` - Profile picture URL
+- `locale` - User's locale
+- `email` - Email address (optional)
+- `email_verified` - Email verification status (optional)
+
 ## Quick Checklist
 
 - [ ] LinkedIn app created in LinkedIn Developers
@@ -138,6 +169,11 @@ When a user signs in with LinkedIn:
 - [ ] Client Secret added to Supabase (as API Secret Key)
 - [ ] Redirect URLs match in both places
 - [ ] Saved configuration in Supabase
+- [ ] Using OpenID Connect scopes (`openid profile email`)
 
 Once all these are done, LinkedIn OAuth should work! 🎉
+
+## References
+
+- [LinkedIn OpenID Connect Documentation](https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/sign-in-with-linkedin-v2)
 

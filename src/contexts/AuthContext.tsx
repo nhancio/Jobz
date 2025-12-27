@@ -61,11 +61,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Check if LinkedIn provider is enabled
+    // Using OpenID Connect scopes as per LinkedIn documentation:
+    // https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/sign-in-with-linkedin-v2
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'linkedin',
       options: {
         redirectTo: window.location.origin,
-        scopes: 'r_liteprofile r_emailaddress openid profile email', // Request LinkedIn profile and email
+        scopes: 'openid profile email', // OpenID Connect scopes (r_liteprofile and r_emailaddress are deprecated)
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
@@ -122,16 +124,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('User not found');
       }
 
-      // LinkedIn profile data is typically in user.user_metadata
+      // LinkedIn profile data from OpenID Connect is in user.user_metadata
+      // According to LinkedIn OIDC docs: https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/sign-in-with-linkedin-v2
+      // Available fields: sub, name, given_name, family_name, picture, locale, email, email_verified
       const linkedInData = {
         id: user.id,
-        email: user.email,
-        fullName: user.user_metadata?.full_name || user.user_metadata?.name,
-        avatarUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture,
-        linkedInId: user.user_metadata?.sub || user.user_metadata?.provider_id,
-        headline: user.user_metadata?.headline,
-        location: user.user_metadata?.location?.name,
-        profileUrl: user.user_metadata?.profile_url,
+        email: user.email || user.user_metadata?.email,
+        fullName: user.user_metadata?.name || user.user_metadata?.full_name,
+        firstName: user.user_metadata?.given_name,
+        lastName: user.user_metadata?.family_name,
+        avatarUrl: user.user_metadata?.picture || user.user_metadata?.avatar_url,
+        linkedInId: user.user_metadata?.sub, // Subject identifier from OIDC
+        locale: user.user_metadata?.locale,
+        emailVerified: user.user_metadata?.email_verified,
         // Additional LinkedIn fields that might be available
         raw: user.user_metadata,
       };

@@ -55,6 +55,11 @@ export function SwipeView({ mode, onMatch, onNavigate }: SwipeViewProps) {
     }, 300);
   };
 
+  const handleStartOver = () => {
+    setExitDirection(null);
+    setCurrentIndex(0);
+  };
+
   // Show loading state
   if (loading) {
     return (
@@ -67,8 +72,29 @@ export function SwipeView({ mode, onMatch, onNavigate }: SwipeViewProps) {
     );
   }
 
-  // Show empty state if no items
-  if (!currentItem || items.length === 0) {
+  // Show empty state if no items or reached end
+  if (items.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center"
+        >
+          <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Briefcase className="w-12 h-12 text-blue-600" />
+          </div>
+          <h2 className="text-slate-800 text-xl font-bold mb-2">
+            No {mode === 'seeker' ? 'jobs' : 'candidates'} available
+          </h2>
+          <p className="text-slate-600 mb-6">Check back later for new opportunities!</p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Show "Start Over" screen if reached end of list
+  if (!currentItem && items.length > 0) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <motion.div
@@ -82,13 +108,19 @@ export function SwipeView({ mode, onMatch, onNavigate }: SwipeViewProps) {
           <h2 className="text-slate-800 text-xl font-bold mb-2">
             No more {mode === 'seeker' ? 'jobs' : 'candidates'}
           </h2>
-          <p className="text-slate-600 mb-6">Check back later for new opportunities!</p>
-          <button
-            onClick={() => setCurrentIndex(0)}
-            className="px-8 py-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 hover:shadow-lg transition-all font-medium"
-          >
-            Start Over
-          </button>
+          <p className="text-slate-600 mb-6">
+            {items.length > 0 
+              ? 'You\'ve seen all available opportunities. Start over to see them again!' 
+              : 'Check back later for new opportunities!'}
+          </p>
+          {items.length > 0 && (
+            <button
+              onClick={handleStartOver}
+              className="px-8 py-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 hover:shadow-lg transition-all font-medium active:scale-95 touch-manipulation"
+            >
+              Start Over
+            </button>
+          )}
         </motion.div>
       </div>
     );
@@ -128,10 +160,10 @@ export function SwipeView({ mode, onMatch, onNavigate }: SwipeViewProps) {
 
       {/* Card Stack */}
       <div className="max-w-md w-full mx-auto relative flex-1 min-h-[400px] sm:min-h-[500px] px-2">
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" initial={false}>
           {currentItem && (
             <SwipeCard
-              key={currentItem.id}
+              key={`${currentItem.id}-${currentIndex}`}
               item={currentItem}
               mode={mode}
               onSwipe={handleSwipe}
